@@ -1,49 +1,186 @@
-<!-- camera.html -->
 <!DOCTYPE html>
-<html lang="en">
+<html lang="hi">
 <head>
-  <meta charset="UTF-8">
-  <title>Camera Capture</title>
-  <style>
-    body { display: flex; flex-direction: column; align-items: center; font-family: sans-serif; padding: 20px; }
-    video, canvas { max-width: 90%; margin: 10px; border: 2px solid #444; border-radius: 12px; }
-    button { padding: 10px 20px; border: 2px solid #00f; border-radius: 10px; background: #eee; font-size: 16px; cursor: pointer; }
-    button:hover { background: #ccc; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>100x Zoom Camera</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden; /* Hide scrollbars */
+            background-color: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: Arial, sans-serif;
+        }
+
+        #video-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden; /* Important for zoom effect */
+        }
+
+        #webcamVideo {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            min-width: 100%;
+            min-height: 100%;
+            width: auto;
+            height: auto;
+            /* Centering and scaling */
+            transform-origin: center center; /* Zoom from the center */
+            transform: translate(-50%, -50%) scale(1);
+            transition: transform 0.1s linear; /* Smooth zoom transition */
+            object-fit: cover; /* Cover the area, might crop */
+        }
+
+        #controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 10px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            color: white;
+            z-index: 10;
+        }
+
+        #controls button, #controls input[type="range"] {
+            padding: 8px 12px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #333;
+            color: white;
+            border: 1px solid #555;
+            border-radius: 5px;
+        }
+        #controls button:hover {
+            background-color: #555;
+        }
+        #controls input[type="range"] {
+            width: 150px;
+        }
+        #zoomLevelDisplay {
+            min-width: 50px;
+            text-align: center;
+        }
+    </style>
 </head>
 <body>
-  <h2>Camera Photo Capture</h2>
-  <video id="video" autoplay playsinline width="300"></video>
-  <canvas id="canvas" style="display: none;"></canvas>
-  <button onclick="capture()">📸 Click Photo</button>
 
-  <script>
-    const chatId = new URLSearchParams(window.location.search).get('chat_id') || 'YOUR_DEFAULT_CHAT_ID';
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
+    <div id="video-container">
+        <video id="webcamVideo" autoplay playsinline muted></video>
+    </div>
 
-    navigator.mediaDevices.getUserMedia({ video: true })
-      .then(stream => {
-        video.srcObject = stream;
-      })
-      .catch(err => {
-        alert("Camera access denied: " + err.message);
-      });
+    <div id="controls">
+        <button id="zoomOutBtn">-</button>
+        <input type="range" id="zoomSlider" min="1" max="100" value="1" step="0.5">
+        <button id="zoomInBtn">+</button>
+        <span id="zoomLevelDisplay">1.0x</span>
+        <button id="resetZoomBtn">रीसेट</button>
+        <button id="fullscreenBtn">फुलस्क्रीन</button>
+    </div>
 
-    function capture() {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      canvas.getContext('2d').drawImage(video, 0, 0);
-      canvas.toBlob(blob => {
-        const formData = new FormData();
-        formData.append('photo', blob, 'photo.jpg');
-        formData.append('chat_id', chatId);
-        fetch('/upload', { method: 'POST', body: formData })
-          .then(res => {
-            if (res.ok) alert("📤 Photo sent to bot!");
-          });
-      }, 'image/jpeg');
-    }
-  </script>
+    <script>
+        const videoElement = document.getElementById('webcamVideo');
+        const zoomSlider = document.getElementById('zoomSlider');
+        const zoomInBtn = document.getElementById('zoomInBtn');
+        const zoomOutBtn = document.getElementById('zoomOutBtn');
+        const resetZoomBtn = document.getElementById('resetZoomBtn');
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        const zoomLevelDisplay = document.getElementById('zoomLevelDisplay');
+
+        let currentZoom = 1;
+        const MIN_ZOOM = 1;
+        const MAX_ZOOM = 100; // Max zoom level
+
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        // You can try to request higher resolution if your webcam supports it
+                        // width: { ideal: 1920 },
+                        // height: { ideal: 1080 },
+                        facingMode: 'environment' // Try to use back camera on mobile
+                    }
+                });
+                videoElement.srcObject = stream;
+            } catch (err) {
+                console.error("कैमरा एक्सेस करने में त्रुटि:", err);
+                alert("कैमरा एक्सेस नहीं हो सका। कृपया अनुमति जांचें और पुनः प्रयास करें।\n" + err.message);
+            }
+        }
+
+        function updateZoom() {
+            // Ensure zoom stays within bounds
+            currentZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, currentZoom));
+            
+            videoElement.style.transform = `translate(-50%, -50%) scale(${currentZoom})`;
+            zoomSlider.value = currentZoom;
+            zoomLevelDisplay.textContent = `${currentZoom.toFixed(1)}x`;
+        }
+
+        zoomSlider.addEventListener('input', () => {
+            currentZoom = parseFloat(zoomSlider.value);
+            updateZoom();
+        });
+
+        zoomInBtn.addEventListener('click', () => {
+            // Increase zoom more significantly at higher levels for perceivable change
+            let step = currentZoom < 10 ? 0.5 : (currentZoom < 50 ? 2 : 5);
+            currentZoom = Math.min(MAX_ZOOM, currentZoom + step);
+            updateZoom();
+        });
+
+        zoomOutBtn.addEventListener('click', () => {
+            let step = currentZoom <= 10 ? 0.5 : (currentZoom <= 50 ? 2 : 5);
+            currentZoom = Math.max(MIN_ZOOM, currentZoom - step);
+            updateZoom();
+        });
+
+        resetZoomBtn.addEventListener('click', () => {
+            currentZoom = MIN_ZOOM;
+            updateZoom();
+        });
+
+        fullscreenBtn.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    alert(`फुल-स्क्रीन मोड सक्षम करने का प्रयास करते समय त्रुटि: ${err.message} (${err.name})`);
+                });
+                fullscreenBtn.textContent = "नॉर्मल स्क्रीन";
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                    fullscreenBtn.textContent = "फुलस्क्रीन";
+                }
+            }
+        });
+        
+        document.addEventListener('fullscreenchange', () => {
+            if (!document.fullscreenElement) {
+                fullscreenBtn.textContent = "फुलस्क्रीन";
+            } else {
+                fullscreenBtn.textContent = "नॉर्मल स्क्रीन";
+            }
+        });
+
+        // Initialize
+        startCamera();
+        updateZoom(); // Set initial zoom display
+
+        // Mute video by default to avoid audio feedback if mic is active
+        // User can unmute if they inspect element and change it, but it's good practice
+        videoElement.muted = true;
+    </script>
+
 </body>
 </html>
