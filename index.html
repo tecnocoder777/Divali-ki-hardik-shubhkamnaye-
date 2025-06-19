@@ -3,183 +3,168 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>100x Zoom Camera</title>
+    <title>HTML फ़िल्टर ऐप</title>
     <style>
         body {
-            margin: 0;
-            overflow: hidden; /* Hide scrollbars */
-            background-color: #000;
+            background-color: #121212;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             display: flex;
+            flex-direction: column;
+            align-items: center;
             justify-content: center;
-            align-items: center;
             height: 100vh;
-            font-family: Arial, sans-serif;
+            margin: 0;
+            overflow: hidden;
         }
 
-        #video-container {
+        h1 {
+            font-weight: 300;
+            letter-spacing: 1px;
+        }
+
+        #camera-container {
             position: relative;
-            width: 100vw;
-            height: 100vh;
-            overflow: hidden; /* Important for zoom effect */
+            width: 90vw;
+            max-width: 600px;
+            border: 5px solid #333;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
         }
 
-        #webcamVideo {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            min-width: 100%;
-            min-height: 100%;
-            width: auto;
+        video {
+            /* हम वीडियो को छिपा कर रखेंगे और कैनवास दिखाएंगे */
+            display: none;
+        }
+
+        canvas {
+            width: 100%;
             height: auto;
-            /* Centering and scaling */
-            transform-origin: center center; /* Zoom from the center */
-            transform: translate(-50%, -50%) scale(1);
-            transition: transform 0.1s linear; /* Smooth zoom transition */
-            object-fit: cover; /* Cover the area, might crop */
+            display: block;
         }
 
-        #controls {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: rgba(0, 0, 0, 0.7);
-            padding: 15px;
-            border-radius: 10px;
+        /* --- फ़िल्टर के स्टाइल्स --- */
+        .filter-sepia { filter: sepia(1); }
+        .filter-grayscale { filter: grayscale(1); }
+        .filter-invert { filter: invert(1); }
+        .filter-hue-rotate { filter: hue-rotate(90deg); }
+        .filter-blur { filter: blur(5px); }
+        .filter-saturate { filter: saturate(2); }
+
+        #filter-controls {
+            margin-top: 20px;
             display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
             gap: 10px;
-            align-items: center;
-            color: white;
-            z-index: 10;
         }
 
-        #controls button, #controls input[type="range"] {
-            padding: 8px 12px;
-            font-size: 16px;
+        .filter-button {
+            background-color: #03dac6; /* Snapchat जैसा Teal कलर */
+            color: #121212;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 25px;
+            font-size: 14px;
+            font-weight: bold;
             cursor: pointer;
-            background-color: #333;
-            color: white;
-            border: 1px solid #555;
-            border-radius: 5px;
+            transition: all 0.2s ease;
         }
-        #controls button:hover {
-            background-color: #555;
+
+        .filter-button:hover {
+            background-color: #018786;
+            transform: translateY(-2px);
         }
-        #controls input[type="range"] {
-            width: 150px;
-        }
-        #zoomLevelDisplay {
-            min-width: 50px;
-            text-align: center;
+        
+        #error-message {
+            color: #cf6679;
+            display: none;
         }
     </style>
 </head>
 <body>
 
-    <div id="video-container">
-        <video id="webcamVideo" autoplay playsinline muted></video>
+    <h1>HTML फ़िल्टर ऐप</h1>
+    <p id="error-message">कैमरा एक्सेस नहीं हो सका। कृपया परमिशन दें।</p>
+
+    <div id="camera-container">
+        <!-- यह वीडियो एलिमेंट कैमरा स्ट्रीम को पकड़ेगा -->
+        <video id="video" autoplay playsinline></video>
+        <!-- यह कैनवास एलिमेंट फ़िल्टर की हुई वीडियो दिखाएगा -->
+        <canvas id="canvas"></canvas>
     </div>
 
-    <div id="controls">
-        <button id="zoomOutBtn">-</button>
-        <input type="range" id="zoomSlider" min="1" max="100" value="1" step="0.5">
-        <button id="zoomInBtn">+</button>
-        <span id="zoomLevelDisplay">1.0x</span>
-        <button id="resetZoomBtn">रीसेट</button>
-        <button id="fullscreenBtn">फुलस्क्रीन</button>
+    <div id="filter-controls">
+        <button class="filter-button" data-filter="none">Normal</button>
+        <button class="filter-button" data-filter="filter-sepia">Sepia</button>
+        <button class="filter-button" data-filter="filter-grayscale">B&W</button>
+        <button class="filter-button" data-filter="filter-invert">Invert</button>
+        <button class="filter-button" data-filter="filter-hue-rotate">Psycho</button>
+        <button class="filter-button" data-filter="filter-blur">Blur</button>
+        <button class="filter-button" data-filter="filter-saturate">Vibrant</button>
     </div>
 
     <script>
-        const videoElement = document.getElementById('webcamVideo');
-        const zoomSlider = document.getElementById('zoomSlider');
-        const zoomInBtn = document.getElementById('zoomInBtn');
-        const zoomOutBtn = document.getElementById('zoomOutBtn');
-        const resetZoomBtn = document.getElementById('resetZoomBtn');
-        const fullscreenBtn = document.getElementById('fullscreenBtn');
-        const zoomLevelDisplay = document.getElementById('zoomLevelDisplay');
+        // 1. HTML एलिमेंट्स को पकड़ना
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const context = canvas.getContext('2d');
+        const filterButtons = document.querySelectorAll('.filter-button');
+        const errorMessage = document.getElementById('error-message');
+        
+        let currentFilter = 'none';
 
-        let currentZoom = 1;
-        const MIN_ZOOM = 1;
-        const MAX_ZOOM = 100; // Max zoom level
-
+        // 2. कैमरा शुरू करना
         async function startCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        // You can try to request higher resolution if your webcam supports it
-                        // width: { ideal: 1920 },
-                        // height: { ideal: 1080 },
-                        facingMode: 'environment' // Try to use back camera on mobile
-                    }
+                    video: { facingMode: 'user' }, // 'user' मतलब सेल्फी कैमरा
+                    audio: false
                 });
-                videoElement.srcObject = stream;
+                video.srcObject = stream;
             } catch (err) {
-                console.error("कैमरा एक्सेस करने में त्रुटि:", err);
-                alert("कैमरा एक्सेस नहीं हो सका। कृपया अनुमति जांचें और पुनः प्रयास करें।\n" + err.message);
+                console.error("कैमरा में गड़बड़ी!", err);
+                errorMessage.style.display = 'block';
             }
         }
 
-        function updateZoom() {
-            // Ensure zoom stays within bounds
-            currentZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, currentZoom));
+        // 3. वीडियो के हर फ्रेम को कैनवास पर बनाना
+        function drawToCanvas() {
+            // कैनवास का साइज़ वीडियो के बराबर सेट करें
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            // कैनवास पर फ़िल्टर लगाएं
+            context.filter = getComputedStyle(canvas).filter;
             
-            videoElement.style.transform = `translate(-50%, -50%) scale(${currentZoom})`;
-            zoomSlider.value = currentZoom;
-            zoomLevelDisplay.textContent = `${currentZoom.toFixed(1)}x`;
+            // वीडियो का वर्तमान फ्रेम कैनवास पर ड्रा करें
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // इस फंक्शन को लूप में चलाते रहें ताकि वीडियो चलती रहे
+            requestAnimationFrame(drawToCanvas);
         }
-
-        zoomSlider.addEventListener('input', () => {
-            currentZoom = parseFloat(zoomSlider.value);
-            updateZoom();
-        });
-
-        zoomInBtn.addEventListener('click', () => {
-            // Increase zoom more significantly at higher levels for perceivable change
-            let step = currentZoom < 10 ? 0.5 : (currentZoom < 50 ? 2 : 5);
-            currentZoom = Math.min(MAX_ZOOM, currentZoom + step);
-            updateZoom();
-        });
-
-        zoomOutBtn.addEventListener('click', () => {
-            let step = currentZoom <= 10 ? 0.5 : (currentZoom <= 50 ? 2 : 5);
-            currentZoom = Math.max(MIN_ZOOM, currentZoom - step);
-            updateZoom();
-        });
-
-        resetZoomBtn.addEventListener('click', () => {
-            currentZoom = MIN_ZOOM;
-            updateZoom();
-        });
-
-        fullscreenBtn.addEventListener('click', () => {
-            if (!document.fullscreenElement) {
-                document.documentElement.requestFullscreen().catch(err => {
-                    alert(`फुल-स्क्रीन मोड सक्षम करने का प्रयास करते समय त्रुटि: ${err.message} (${err.name})`);
-                });
-                fullscreenBtn.textContent = "नॉर्मल स्क्रीन";
-            } else {
-                if (document.exitFullscreen) {
-                    document.exitFullscreen();
-                    fullscreenBtn.textContent = "फुलस्क्रीन";
+        
+        // 4. फ़िल्टर बटन पर क्लिक को हैंडल करना
+        filterButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                // कैनवास से पुराने सारे फ़िल्टर क्लास हटा दें
+                canvas.className = '';
+                
+                const filterName = button.getAttribute('data-filter');
+                if (filterName !== 'none') {
+                    // नया फ़िल्टर क्लास लगाएं
+                    canvas.classList.add(filterName);
                 }
-            }
+            });
         });
         
-        document.addEventListener('fullscreenchange', () => {
-            if (!document.fullscreenElement) {
-                fullscreenBtn.textContent = "फुलस्क्रीन";
-            } else {
-                fullscreenBtn.textContent = "नॉर्मल स्क्रीन";
-            }
-        });
+        // जब वीडियो चलना शुरू हो, तो कैनवास पर ड्राइंग शुरू कर दें
+        video.addEventListener('canplay', drawToCanvas);
 
-        // Initialize
+        // पेज लोड होते ही कैमरा शुरू करें
         startCamera();
-        updateZoom(); // Set initial zoom display
 
-        // Mute video by default to avoid audio feedback if mic is active
-        // User can unmute if they inspect element and change it, but it's good practice
-        videoElement.muted = true;
     </script>
 
 </body>
